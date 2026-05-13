@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SF Design Week 2026 — Event Browser</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f4f0;color:#1a1a1a;height:100vh;display:flex;flex-direction:column}
+header{padding:12px 20px;background:white;border-bottom:1px solid #e5e5e5;display:flex;align-items:center;gap:12px;flex-shrink:0}
+header h1{font-size:16px;font-weight:600}
+header .sub{font-size:13px;color:#888}
+.shell{display:flex;flex:1;overflow:hidden}
+.map-pane{flex:1 1 60%;position:relative;overflow:hidden}
+#map{width:100%;height:100%}
+.map-badge{position:absolute;top:12px;left:12px;background:white;border:1px solid #e5e5e5;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:500;z-index:1000;display:flex;align-items:center;gap:8px;pointer-events:none;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+.map-dot{width:8px;height:8px;border-radius:50%;background:#1D9E75;flex-shrink:0}
+.events-pane{flex:0 0 340px;border-left:1px solid #e5e5e5;display:flex;flex-direction:column;overflow:hidden;background:white}
+.day-tabs{display:flex;gap:4px;padding:10px 14px;flex-shrink:0;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid #e5e5e5}
+.day-tabs::-webkit-scrollbar{display:none}
+.dtab{font-size:11px;padding:5px 10px;border-radius:20px;border:1px solid #e5e5e5;color:#666;cursor:pointer;white-space:nowrap;background:transparent;flex-shrink:0;transition:all .15s}
+.dtab.active{background:#f0f0f0;color:#111;border-color:#ccc;font-weight:500}
+.dtab:hover{background:#f7f7f7}
+.evlist{flex:1;overflow-y:auto;padding:0 0 16px}
+.tlabel{font-size:10px;font-weight:600;color:#999;text-transform:uppercase;letter-spacing:.06em;padding:10px 16px 5px;position:sticky;top:0;background:white;z-index:2;border-bottom:1px solid #f0f0f0}
+.ecard{padding:10px 16px;cursor:pointer;border-bottom:1px solid #f5f5f5;transition:background .1s}
+.ecard:hover{background:#fafafa}
+.ecard.sel{background:#f5faf8;border-left:3px solid #1D9E75;padding-left:13px}
+.ename{font-size:13px;font-weight:500;line-height:1.35;margin-bottom:4px}
+.emeta{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:3px}
+.etime{font-size:11px;color:#888}
+.etag{font-size:10px;padding:2px 7px;border-radius:20px;font-weight:500}
+.tag-talk{background:#e8f2fd;color:#1a5fa8}
+.tag-social{background:#e2f5ee;color:#0f6e56}
+.tag-workshop{background:#fef3e2;color:#7a4a0a}
+.tag-studio{background:#f0eeff;color:#4a3a9a}
+.tag-exhibition{background:#fdeee8;color:#8a3a1a}
+.eloc{font-size:11px;color:#999;display:flex;align-items:center;gap:3px}
+.pnum{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;color:white;font-size:9px;font-weight:600;margin-right:5px;flex-shrink:0;vertical-align:middle}
+.detail{position:absolute;bottom:0;left:0;right:0;background:white;border-top:1px solid #e5e5e5;padding:16px 18px 18px;transform:translateY(100%);transition:transform .22s ease;z-index:1001;box-shadow:0 -4px 20px rgba(0,0,0,.08)}
+.detail.open{transform:translateY(0)}
+.dscroll{overflow-y:auto;max-height:200px;margin-top:8px}
+.dtitle{font-size:14px;font-weight:600;line-height:1.35;padding-right:28px}
+.dmeta{font-size:12px;color:#888;margin:5px 0 10px}
+.ddesc{font-size:12.5px;color:#444;line-height:1.7}
+.dlink{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#1D9E75;text-decoration:none;margin-top:10px;font-weight:500}
+.dlink:hover{text-decoration:underline}
+.dclose{position:absolute;top:16px;right:16px;background:none;border:none;cursor:pointer;color:#aaa;font-size:20px;line-height:1}
+.dclose:hover{color:#555}
+.empty{padding:40px 16px;text-align:center;font-size:13px;color:#aaa}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>SF Design Week 2026</h1>
+  </div>
+  <div class="sub">20th Anniversary · Theme: Multitudes · June 1–12</div>
+</header>
+
+<div class="shell">
+  <div class="map-pane">
+    <div class="map-badge"><span class="map-dot"></span><span id="mapLabel">Loading…</span></div>
+    <div id="map"></div>
+    <div class="detail" id="detail">
+      <button class="dclose" onclick="closeDetail()" aria-label="Close">×</button>
+      <div class="dtitle" id="dtitle"></div>
+      <div class="dmeta" id="dmeta"></div>
+      <div class="dscroll"><div class="ddesc" id="ddesc"></div></div>
+      <a class="dlink" id="dlink" href="#" target="_blank">View on sfdesignweek.org ↗</a>
+    </div>
+  </div>
+
+  <div class="events-pane">
+    <div class="day-tabs" id="dayTabs"></div>
+    <div class="evlist" id="evlist"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const COLORS=['#1D9E75','#534AB7','#D85A30','#185FA5','#BA7517','#993556','#3B6D11','#885533','#0F6E56','#3C3489'];
+
+const ALL_EVENTS=[
+  {id:1,date:'2026-06-01',start:'16:00',end:'20:00',name:'Open Box: Open Studio with Zenpack',venue:'Zenpack San Jose Design Studio',address:'1050 N 5th St #30, San Jose, CA',lat:37.3488,lng:-121.9054,type:'studio',tag:'Open Studio',desc:'A casual open studio where Zenpack invites designers, founders, and creatives to explore their packaging design studio, meet the team, and connect. Drinks and light refreshments provided.',url:'https://sfdesignweek.org/event/open-box-an-open-studio-experience-with-zenpack/'},
+  {id:2,date:'2026-06-02',start:'08:30',end:'10:00',name:'Creatives in Conversation: AI & Design Tools',venue:'Adobe',address:'601 Townsend St, San Francisco',lat:37.7724,lng:-122.4037,type:'talk',tag:'Panel',desc:'Panelists Evgenia Piskun, Ted Chin, and Yiying Lu (creator of the Twitter Fail Whale) discuss how AI tools like Adobe Firefly integrate into real workflows — and where human instinct remains irreplaceable.',url:'https://sfdesignweek.org/event/creatives-in-conversation-processes-tools-shaping-todays-design/'},
+  {id:3,date:'2026-06-02',start:'11:00',end:'14:00',name:'Caroline Lizarraga: The Art of Surface',venue:'Cooritalia & Elementi Showroom',address:'151 Vermont St Suite 3, San Francisco',lat:37.7638,lng:-122.4063,type:'talk',tag:'Demo/Talk',desc:'Live demonstration by decorative artist Caroline Lizarraga on transforming architectural surfaces — where pigment meets stone and texture becomes expressive art.',url:'https://sfdesignweek.org/event/caroline-lizarraga-the-art-of-surface/'},
+  {id:4,date:'2026-06-02',start:'17:00',end:'17:45',name:'The Case for Convention: Architecture & Clarity',venue:'De Sousa Hughes',address:'101 Henry Adams St, San Francisco',lat:37.7684,lng:-122.4097,type:'talk',tag:'Talk',desc:'Butler Armsden Architects\' Sunwoo Kim argues for convention, clarity, and restraint in residential architecture — drawing from Vitruvius to Venturi. Signed copy of Common Architecture included with ticket.',url:'https://sfdesignweek.org/event/the-case-for-convention-what-history-and-clarity-can-teach-us-about-good-architecture/'},
+  {id:5,date:'2026-06-02',start:'17:00',end:'20:00',name:'Strange New Bodies: Design Beyond Robots — IDEO',venue:'IDEO',address:'350 Florida St, San Francisco',lat:37.7647,lng:-122.4113,type:'talk',tag:'Panel',desc:'IDEO design leaders and special guests explore the emerging visual and behavioral language of human-robot interaction — how robots look, move, and build trust across cultures.',url:'https://sfdesignweek.org/event/strange-new-bodies-design-beyond-robots/'},
+  {id:6,date:'2026-06-02',start:'17:00',end:'20:00',name:'Shaping Spaces with Beautiful Sound',venue:'Bang & Olufsen SF Flagship',address:'146 Geary St, San Francisco',lat:37.7879,lng:-122.4066,type:'social',tag:'Social/Talk',desc:'Architect Craig O\'Connell + guests from EMPIRE Records discuss how sound transforms spaces. Sound Sampling Hour with chef Eríc Martínez, vinyl DJ sets, gourmet bites, and B&O Atelier Composer demos.',url:'https://sfdesignweek.org/event/shaping-spaces-with-beautiful-sound/'},
+  {id:7,date:'2026-06-02',start:'18:00',end:'20:00',name:'An Evening at Thuma, Hosted by the Design Team',venue:'Thuma SF Flagship',address:'2197 Chestnut St, San Francisco',lat:37.8003,lng:-122.4393,type:'social',tag:'Social',desc:'Happy hour at Thuma\'s Marina flagship. Behind-the-scenes look at design process materials, light refreshments, and a 7 PM toast on Thuma\'s design philosophy: simplicity as the ultimate luxury.',url:'https://sfdesignweek.org/event/an-evening-at-thuma-hosted-by-the-design-team/'},
+  {id:8,date:'2026-06-02',start:'18:00',end:'21:00',name:'Career as a Brand System™ Workshop',venue:'Rtrospct Studio',address:'2950 Geneva Ave, Daly City',lat:37.7082,lng:-122.4393,type:'workshop',tag:'Workshop',desc:'Hands-on workshop introducing Career as a Brand System™ — turning your design work into something visible and opportunity-generating. Covers narrative, language, asset, and visibility frameworks.',url:'https://sfdesignweek.org/event/career-as-a-brand-system-design-your-narrative-positioning-and-visibility/'},
+  {id:9,date:'2026-06-03',start:'11:00',end:'12:00',name:'The Future of Home Robotics — Box Clever × Weave',venue:'Online (California)',address:'Online',lat:37.7749,lng:-122.4194,type:'talk',tag:'Talk',desc:'Leaders from Weave Robotics and Box Clever present their vision for home robotics — a 2026 general-purpose robot designed with a decor-driven, lifestyle-first philosophy.',url:'https://sfdesignweek.org/event/the-future-of-home-robotics-by-box-clever-x-weave-robotics/'},
+  {id:10,date:'2026-06-03',start:'13:00',end:'14:00',name:'Plural by Nature: Curiosity as a Creative Practice',venue:'Four One Nine',address:'419 10th St, San Francisco',lat:37.7705,lng:-122.4117,type:'talk',tag:'Talk',desc:'A talk by Sonya reframing creativity through cultural multiplicity — the in-between space of two cultures as a generative creative practice rooted in curiosity over expertise.',url:'https://sfdesignweek.org/event/plural-by-nature-curiosity-as-a-creative-practice/'},
+  {id:11,date:'2026-06-03',start:'14:30',end:'15:30',name:'Innovation & Optimism in the Bay Area',venue:'Four One Nine',address:'419 10th St, San Francisco',lat:37.7705,lng:-122.4117,type:'talk',tag:'Panel',desc:'Design Bay Area\'s Year of Design celebration with panelists from Eames Institute, Love Good Color, and Project Color Corps on design\'s role in civic imagination and cultural change.',url:'https://sfdesignweek.org/event/innovation-in-the-bay-area/'},
+  {id:12,date:'2026-06-03',start:'14:30',end:'15:30',name:'The Art of Making Surfboards',venue:'Four One Nine',address:'419 10th St, San Francisco',lat:37.7705,lng:-122.4117,type:'talk',tag:'Talk',desc:'Michael Quesenbury on bespoke vintage-style surfboards — functional objects built with hand-craft techniques, sacred geometry, and reclaimed materials.',url:'https://sfdesignweek.org/event/the-art-of-making-surfboards/'},
+  {id:13,date:'2026-06-03',start:'16:00',end:'17:00',name:'Food as Infrastructure — Christian Douglas Design',venue:'Four One Nine',address:'419 10th St, San Francisco',lat:37.7705,lng:-122.4117,type:'talk',tag:'Talk',desc:'Christian Douglas Design on food-centered landscape architecture at every scale — from rooftop farms to home gardens. Food as ecological resilience and lasting environmental impact.',url:'https://sfdesignweek.org/event/a-conversation-with-christian-douglas-design/'},
+  {id:14,date:'2026-06-03',start:'16:00',end:'17:00',name:'Global Contemporary Design, Crafted in Mexico',venue:'Four One Nine',address:'419 10th St, San Francisco',lat:37.7705,lng:-122.4117,type:'talk',tag:'Talk',desc:'Colección Estudio on building a global design practice with deep Mexican craft roots, plus their Punto 3 mentorship platform for emerging designers.',url:'https://sfdesignweek.org/event/global-contemporary-design-crafted-in-mexico/'},
+  {id:15,date:'2026-06-03',start:'17:00',end:'19:15',name:'Korean Waves in Design: Multitudes from Seoul',venue:'Asian Art Museum — Samsung Hall',address:'200 Larkin St, San Francisco',lat:37.7801,lng:-122.4163,type:'exhibition',tag:'Exhibition/Panel',desc:'Panel with Stanford SCIDR, Asian Art Museum, and Google designers, followed by 6 Korean agency presentations. Open exhibition + networking with Korean food & beverages.',url:'https://sfdesignweek.org/event/korean-waves-in-design-multitudes-from-seoul/'},
+  {id:16,date:'2026-06-03',start:'17:00',end:'20:00',name:'Cambria Style: Mix & Mingle',venue:'Scott & Cooner SF Showroom',address:'543 8th St, San Francisco',lat:37.7711,lng:-122.4085,type:'social',tag:'Social',desc:'Celebrate Cambria Style issue 30 launch at the Scott & Cooner showroom. Industry professionals, light bites, and applications from Cambria Quartz.',url:'https://sfdesignweek.org/event/cambria-style-mix-mingle/'},
+  {id:17,date:'2026-06-03',start:'17:00',end:'20:00',name:'Where Design Begins: Vizcom Exhibition Opening',venue:'Vizcom',address:'488 Bryant St, San Francisco',lat:37.7795,lng:-122.3970,type:'exhibition',tag:'Exhibition',desc:'Opening night of Vizcom\'s Makerspace gallery. AI-integrated design from automotive, fashion, ID & architecture. Hands-on demos, live fabrication. Gallery runs through June 11.',url:'https://sfdesignweek.org/event/where-design-begins-an-open-exhibition-by-vizcom-opening-party/'},
+  {id:18,date:'2026-06-03',start:'17:00',end:'20:00',name:'Imagination in the Making — level studio',venue:'level',address:'530 Hampshire St Suite 301, San Francisco',lat:37.7638,lng:-122.4165,type:'studio',tag:'Open Studio',desc:'Designer-parents at "level" invite you behind the scenes of products including Nex Playground — interactive demos and early look at what\'s coming next.',url:'https://sfdesignweek.org/event/imagination-in-the-making/'},
+  {id:19,date:'2026-06-03',start:'17:30',end:'18:30',name:'Marblis + Studio Anand Sheth: Materials Innovation',venue:'Four One Nine',address:'419 10th St, San Francisco',lat:37.7705,lng:-122.4117,type:'talk',tag:'Talk',desc:'Virj Kan of Primitives/MARBLIS on Urchinite™ — bio marble made from sea urchins to restore kelp forests. Plus Studio Anand Sheth on interiors as interconnected spatial practice.',url:'https://sfdesignweek.org/event/a-conversation-with-marblis-primitives-studio-anand-sheth/'},
+  {id:20,date:'2026-06-03',start:'17:30',end:'19:30',name:'Service Design Network Mixer',venue:'DesignMap Studio',address:'917 Bryant St, San Francisco',lat:37.7753,lng:-122.4030,type:'social',tag:'Mixer',desc:'Learn about service design and connect with practitioners. Activities, snacks, and a choose-your-own-adventure format. Open to all levels.',url:'https://sfdesignweek.org/event/service-design-network-mixer/'},
+  {id:21,date:'2026-06-03',start:'17:30',end:'20:00',name:'Create Now San Francisco — Adobe',venue:'Terra Gallery & Event Venue',address:'511 Harrison St, San Francisco',lat:37.7828,lng:-122.3966,type:'workshop',tag:'Workshop',desc:'Hands-on evening with Adobe experts covering Photoshop, Illustrator, Express, Firefly, and AI workflows. Complimentary bites, drinks, and Creative Cloud giveaway.',url:'https://sfdesignweek.org/event/create-now-san-francisco-design-week/'},
+  {id:22,date:'2026-06-03',start:'17:30',end:'20:00',name:'From Designer to Founder: The Leap We Don\'t Talk About',venue:'Workato',address:'600 Illinois St, San Francisco',lat:37.7659,lng:-122.3908,type:'talk',tag:'Talk',desc:'AI has changed the calculus. Designers already have vision and taste — this talk invites them to see founding as an act of design: shaping product, narrative, culture, and company.',url:'https://sfdesignweek.org/event/from-designer-to-founder-the-leap-we-dont-talk-about/'},
+  {id:23,date:'2026-06-03',start:'18:00',end:'21:00',name:'Cutting the Cord: Gantri Wireless with Ammunition',venue:'Gantri The Shop',address:'320 10th St, San Francisco',lat:37.7705,lng:-122.4131,type:'studio',tag:'Open Studio',desc:'First look at Gantri\'s new wireless lighting collection designed by Ammunition. Intimate conversation on rethinking lighting without cords.',url:'https://sfdesignweek.org/event/cutting-the-cord-inside-gantri-wireless-with-ammunition/'},
+  {id:24,date:'2026-06-03',start:'19:00',end:'21:00',name:'Design Your Future — Prof. Sebastian Kernbach',venue:'Fingersnips Media Arts & Record Store',address:'3527 20th St, San Francisco',lat:37.7587,lng:-122.4238,type:'workshop',tag:'Workshop',desc:'Stanford Prof. Kernbach leads a hands-on Life Design mini-zine workshop blending design thinking, behavioral science, and positive psychology.',url:'https://sfdesignweek.org/event/design-your-future-proactively-shaping-whats-next/'},
+  {id:25,date:'2026-06-04',start:'10:00',end:'12:00',name:'Designing for Museums: Inside FAMSF Design Studio',venue:'de Young Museum — Koret Auditorium',address:'50 Hagiwara Tea Garden Dr, San Francisco',lat:37.7716,lng:-122.4686,type:'talk',tag:'Talk',desc:'FAMSF\'s graphic and exhibition design teams walk through their process for special exhibitions. Ticket includes museum admission + Monet & Venice show.',url:'https://sfdesignweek.org/event/designing-for-museums-inside-the-design-studio-at-famsf/'},
+  {id:26,date:'2026-06-04',start:'11:00',end:'16:15',name:'Cambria Style — Open Studio (Union City)',venue:'Cambria Sales & Distribution Center',address:'1747 Atlantic St, Union City, CA',lat:37.5934,lng:-122.0441,type:'studio',tag:'Open Studio',desc:'Celebrate Cambria Style issue 30 with showroom and distribution center tours, swag bags, and a Benjamin Moore Color of the Year presentation.',url:'https://sfdesignweek.org/event/cambria-style-launch-open-studio/'},
+  {id:27,date:'2026-06-04',start:'13:30',end:'15:30',name:'Common Threads: Cross-Discipline Conversations',venue:'Studio O+A',address:'452 Tehama St, San Francisco',lat:37.7827,lng:-122.3990,type:'talk',tag:'Panel',desc:'Two conversations featuring Primo Orpilla, DJ The Selecter, Cento Coffee\'s John Quintos, ZGF\'s Gene Sandoval, and Anthropic filmmaker Everett Katigbak (Sundance winner) on design and legacy.',url:'https://sfdesignweek.org/event/common-threads-cross-discipline-conversations/'},
+  {id:28,date:'2026-06-04',start:'15:30',end:'18:30',name:'Designing Worlds: How Products Hold Complexity',venue:'GSC Agency',address:'201 Jackson St, San Francisco',lat:37.7964,lng:-122.3982,type:'workshop',tag:'Panel + Workshop',desc:'Panel with Samsung, Field Paoli Architecture & Collab Fertility on designing with contradiction, then a guided working session. Ends with social mixer + DJ.',url:'https://sfdesignweek.org/event/designing-worlds-how-products-and-experiences-hold-complexity/'},
+  {id:29,date:'2026-06-04',start:'15:30',end:'18:30',name:'Find Your Signal: Creative Workshop',venue:'IDEO',address:'350 Florida St, San Francisco',lat:37.7647,lng:-122.4113,type:'workshop',tag:'Workshop',desc:'Elysa Fenenbock (Stanford d.school) and Lynn Casey lead a hands-on session using futures thinking, play science, and tarot archetypes. Leave with handmade artifacts and a 90-day creative challenge.',url:'https://sfdesignweek.org/event/find-your-signal-a-hands-on-creative-workshop-for-designers/'},
+  {id:30,date:'2026-06-04',start:'17:00',end:'19:15',name:'CAD, Design + AI',venue:'Groundfloor SF',address:'455 Valencia St, San Francisco',lat:37.7675,lng:-122.4218,type:'talk',tag:'Talk/Show & Tell',desc:'Mike Kuniavsky and Slate Werner host a discussion on 3D parametric CAD being transformed by AI. Bring your AI + CAD tools, projects, or workflows for show & tell.',url:'https://sfdesignweek.org/event/cad-design-ai/'}
+];
+
+const DAYS=[
+  {key:'2026-06-01',label:'Mon Jun 1'},
+  {key:'2026-06-02',label:'Tue Jun 2'},
+  {key:'2026-06-03',label:'Wed Jun 3'},
+  {key:'2026-06-04',label:'Thu Jun 4'},
+];
+
+let currentDay='2026-06-01',selectedId=null,map=null,markersMap={};
+
+function fmt(t){
+  const[h,m]=t.split(':').map(Number);
+  const ap=h>=12?'PM':'AM';
+  return(m===0?`${h%12||12}`:`${h%12||12}:${String(m).padStart(2,'0')}`)+' '+ap;
+}
+function getSlot(s){
+  const h=parseInt(s);
+  if(h<12)return'0_Morning';
+  if(h<14)return'1_Midday';
+  if(h<17)return'2_Afternoon';
+  if(h<19)return'3_Evening (5–7 PM)';
+  return'4_Evening (7–9 PM)';
+}
+function slotLabel(s){return s.replace(/^\d_/,'');}
+function tagClass(t){return{talk:'tag-talk',social:'tag-social',workshop:'tag-workshop',studio:'tag-studio',exhibition:'tag-exhibition'}[t]||'tag-talk';}
+
+function makeIcon(color,label){
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36"><path d="M14 0C6.3 0 0 6.3 0 14c0 9.6 14 22 14 22s14-12.4 14-22C28 6.3 21.7 0 14 0z" fill="${color}"/><circle cx="14" cy="14" r="9" fill="white" opacity="0.2"/><text x="14" y="18" text-anchor="middle" font-size="10" font-weight="600" fill="white" font-family="system-ui,sans-serif">${label}</text></svg>`;
+  return L.divIcon({html:svg,iconSize:[28,36],iconAnchor:[14,36],popupAnchor:[0,-36],className:''});
+}
+
+function initMap(){
+  map=L.map('map',{zoomControl:true}).setView([37.775,-122.42],13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© <a href="https://openstreetmap.org">OpenStreetMap</a>',maxZoom:19
+  }).addTo(map);
+  renderMarkers();
+}
+
+function renderMarkers(){
+  Object.values(markersMap).forEach(m=>m.remove());
+  markersMap={};
+  const evs=ALL_EVENTS.filter(e=>e.date===currentDay);
+  const seen={};
+  evs.forEach((ev,i)=>{
+    const k=`${ev.lat},${ev.lng}`;
+    if(seen[k])return;
+    seen[k]=true;
+    const grp=evs.filter(e=>`${e.lat},${e.lng}`===k);
+    const color=COLORS[i%COLORS.length];
+    const marker=L.marker([ev.lat,ev.lng],{icon:makeIcon(color,ev.id)}).addTo(map);
+    marker.on('click',()=>openDetail(grp[0].id));
+    markersMap[k]=marker;
+  });
+  const vc=Object.keys(seen).length;
+  document.getElementById('mapLabel').textContent=`${DAYS.find(d=>d.key===currentDay)?.label} · ${evs.length} events · ${vc} venue${vc!==1?'s':''}`;
+  if(evs.length){
+    const lats=evs.map(e=>e.lat),lngs=evs.map(e=>e.lng),pad=0.018;
+    map.fitBounds([[Math.min(...lats)-pad,Math.min(...lngs)-pad],[Math.max(...lats)+pad,Math.max(...lngs)+pad]]);
+  }
+}
+
+function renderTabs(){
+  const tabs=document.getElementById('dayTabs');
+  tabs.innerHTML='';
+  DAYS.forEach(d=>{
+    const cnt=ALL_EVENTS.filter(e=>e.date===d.key).length;
+    const b=document.createElement('button');
+    b.className='dtab'+(d.key===currentDay?' active':'');
+    b.textContent=`${d.label} (${cnt})`;
+    b.onclick=()=>{currentDay=d.key;selectedId=null;closeDetail();renderTabs();renderEvents();renderMarkers();};
+    tabs.appendChild(b);
+  });
+}
+
+function renderEvents(){
+  const list=document.getElementById('evlist');
+  list.innerHTML='';
+  const evs=ALL_EVENTS.filter(e=>e.date===currentDay);
+  if(!evs.length){list.innerHTML='<div class="empty">No events listed for this day.</div>';return;}
+  const grouped={};
+  evs.forEach(e=>{const s=getSlot(e.start);if(!grouped[s])grouped[s]=[];grouped[s].push(e);});
+  Object.keys(grouped).sort().forEach(slot=>{
+    const lbl=document.createElement('div');
+    lbl.className='tlabel';lbl.textContent=slotLabel(slot);
+    list.appendChild(lbl);
+    grouped[slot].sort((a,b)=>a.start.localeCompare(b.start)).forEach(ev=>{
+      const card=document.createElement('div');
+      card.className='ecard'+(selectedId===ev.id?' sel':'');
+      card.id=`card-${ev.id}`;
+      const color=COLORS[(ev.id-1)%COLORS.length];
+      card.innerHTML=`<div class="ename"><span class="pnum" style="background:${color}">${ev.id}</span>${ev.name}</div>
+        <div class="emeta"><span class="etime">${fmt(ev.start)}–${fmt(ev.end)}</span><span class="etag ${tagClass(ev.type)}">${ev.tag}</span></div>
+        <div class="eloc">📍 ${ev.venue}</div>`;
+      card.onclick=()=>openDetail(ev.id);
+      list.appendChild(card);
+    });
+  });
+}
+
+function openDetail(id){
+  const ev=ALL_EVENTS.find(e=>e.id===id);
+  if(!ev)return;
+  selectedId=id;
+  renderEvents();
+  document.getElementById('dtitle').textContent=ev.name;
+  document.getElementById('dmeta').textContent=`${fmt(ev.start)} – ${fmt(ev.end)}  ·  ${ev.venue}  ·  ${ev.address}`;
+  document.getElementById('ddesc').textContent=ev.desc;
+  document.getElementById('dlink').href=ev.url;
+  document.getElementById('detail').classList.add('open');
+  if(map) map.setView([ev.lat,ev.lng],14,{animate:true});
+  document.getElementById(`card-${id}`)?.scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+
+function closeDetail(){
+  selectedId=null;
+  document.getElementById('detail').classList.remove('open');
+  renderEvents();
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  renderTabs();
+  renderEvents();
+  initMap();
+});
+</script>
+</body>
+</html>
