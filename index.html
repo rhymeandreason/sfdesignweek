@@ -39,9 +39,10 @@ header .sub{font-size:13px;color:#888}
 .tag-exhibition{background:#fdeee8;color:#8a3a1a}
 .eloc{font-size:11px;color:#999;display:flex;align-items:center;gap:3px}
 .pnum{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;color:white;font-size:9px;font-weight:600;margin-right:5px;flex-shrink:0;vertical-align:middle}
-.detail{position:absolute;bottom:0;left:0;right:0;background:white;border-top:1px solid #e5e5e5;padding:16px 18px 18px;transform:translateY(100%);transition:transform .22s ease;z-index:1001;box-shadow:0 -4px 20px rgba(0,0,0,.08)}
-.detail.open{transform:translateY(0)}
-.dscroll{overflow-y:auto;max-height:200px;margin-top:8px}
+.detail-col{flex:0 0 0;overflow:hidden;border-left:1px solid #e5e5e5;background:white;transition:flex-basis .22s ease;position:relative}
+.detail-col.open{flex:0 0 280px}
+.detail{padding:16px 18px 18px;height:100%;display:flex;flex-direction:column;width:280px}
+.dscroll{overflow-y:auto;flex:1;margin-top:8px}
 .dtitle{font-size:14px;font-weight:600;line-height:1.35;padding-right:28px}
 .dmeta{font-size:12px;color:#888;margin:5px 0 10px}
 .ddesc{font-size:12.5px;color:#444;line-height:1.7}
@@ -65,6 +66,9 @@ header .sub{font-size:13px;color:#888}
   <div class="map-pane">
     <div class="map-badge"><span class="map-dot"></span><span id="mapLabel">Loading…</span></div>
     <div id="map"></div>
+  </div>
+
+  <div class="detail-col" id="detailCol">
     <div class="detail" id="detail">
       <button class="dclose" onclick="closeDetail()" aria-label="Close">×</button>
       <div class="dtitle" id="dtitle"></div>
@@ -159,18 +163,22 @@ function renderMarkers(){
   Object.values(markersMap).forEach(m=>m.remove());
   markersMap={};
   const evs=ALL_EVENTS.filter(e=>e.date===currentDay);
-  const seen={};
-  evs.forEach((ev,i)=>{
+  const locCount={},locIdx={};
+  evs.forEach(ev=>{const k=`${ev.lat},${ev.lng}`;locCount[k]=(locCount[k]||0)+1;});
+  evs.forEach(ev=>{
     const k=`${ev.lat},${ev.lng}`;
-    if(seen[k])return;
-    seen[k]=true;
-    const grp=evs.filter(e=>`${e.lat},${e.lng}`===k);
-    const color=COLORS[i%COLORS.length];
-    const marker=L.marker([ev.lat,ev.lng],{icon:makeIcon(color,ev.id)}).addTo(map);
-    marker.on('click',()=>openDetail(grp[0].id));
-    markersMap[k]=marker;
+    if(!(k in locIdx))locIdx[k]=0;
+    const total=locCount[k],idx=locIdx[k]++;
+    const r=total>1?0.00028:0;
+    const angle=(idx/total)*2*Math.PI-Math.PI/2;
+    const lat=ev.lat+Math.sin(angle)*r;
+    const lng=ev.lng+Math.cos(angle)*r;
+    const color=COLORS[(ev.id-1)%COLORS.length];
+    const marker=L.marker([lat,lng],{icon:makeIcon(color,ev.id)}).addTo(map);
+    marker.on('click',()=>openDetail(ev.id));
+    markersMap[ev.id]=marker;
   });
-  const vc=Object.keys(seen).length;
+  const vc=Object.keys(locCount).length;
   document.getElementById('mapLabel').textContent=`${DAYS.find(d=>d.key===currentDay)?.label} · ${evs.length} events · ${vc} venue${vc!==1?'s':''}`;
   if(evs.length){
     const lats=evs.map(e=>e.lat),lngs=evs.map(e=>e.lng),pad=0.018;
@@ -225,14 +233,14 @@ function openDetail(id){
   document.getElementById('dmeta').textContent=`${fmt(ev.start)} – ${fmt(ev.end)}  ·  ${ev.venue}  ·  ${ev.address}`;
   document.getElementById('ddesc').textContent=ev.desc;
   document.getElementById('dlink').href=ev.url;
-  document.getElementById('detail').classList.add('open');
+  document.getElementById('detailCol').classList.add('open');
   if(map) map.setView([ev.lat,ev.lng],14,{animate:true});
   document.getElementById(`card-${id}`)?.scrollIntoView({block:'nearest',behavior:'smooth'});
 }
 
 function closeDetail(){
   selectedId=null;
-  document.getElementById('detail').classList.remove('open');
+  document.getElementById('detailCol').classList.remove('open');
   renderEvents();
 }
 
