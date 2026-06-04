@@ -98,7 +98,6 @@
                 flex-shrink: 0;
                 overflow-x: auto;
                 scrollbar-width: none;
-                border-bottom: 1px solid #e5e5e5;
             }
             .day-tabs::-webkit-scrollbar {
                 display: none;
@@ -568,7 +567,7 @@
                 renderEvents();
                 document.getElementById("dtitle").textContent = ev.name;
                 document.getElementById("dmeta").textContent =
-                    `${fmt(ev.start)} – ${fmt(ev.end)}  ·  ${ev.venue}  ·  ${ev.address}`;
+                    `${fmt(ev.start)} – ${fmt(ev.end)}  /n  ${ev.venue}  ·  ${ev.address}`;
                 document.getElementById("ddesc").textContent = ev.desc;
                 document.getElementById("dlink").href = ev.url;
                 document.getElementById("detailCol").classList.add("open");
