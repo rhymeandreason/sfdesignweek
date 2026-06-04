@@ -296,6 +296,9 @@
                 font-size: 13px;
                 color: #aaa;
             }
+            .selected-marker svg {
+                scale: 1.3;
+            }
         </style>
     </head>
     <body>
@@ -1169,7 +1172,10 @@
                     const marker = L.marker([lat, lng], {
                         icon: makeIcon(color, ev.id),
                     }).addTo(map);
-                    marker.on("click", () => openDetail(ev.id));
+                    marker.getElement().id = "marker-" + ev.id;
+                    marker.on("click", () =>
+                        openDetail(ev.id, marker.getElement()),
+                    );
                     markersMap[ev.id] = marker;
                 });
                 const vc = Object.keys(locCount).length;
@@ -1250,7 +1256,19 @@
                     });
             }
 
-            function openDetail(id) {
+            function openDetail(id, m) {
+                const elements = document.querySelectorAll(".selected-marker");
+                elements.forEach((element) => {
+                    element.classList.remove("selected-marker");
+                });
+
+                const currentElement = document.getElementById("marker-" + id);
+                currentElement.classList.add("selected-marker");
+                if (markersMap[selectedId]) {
+                    markersMap[selectedId].setZIndexOffset(2); //the previous marker
+                }
+                markersMap[id].setZIndexOffset(100);
+
                 const ev = ALL_EVENTS.find((e) => e.id === id);
                 if (!ev) return;
                 selectedId = id;
