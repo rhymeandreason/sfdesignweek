@@ -253,6 +253,9 @@
                 color: #888;
                 margin: 5px 0 10px;
             }
+            .dmeta p {
+                margin-top: 10px;
+            }
             .ddesc {
                 font-size: 12.5px;
                 color: #444;
@@ -566,8 +569,8 @@
                 selectedId = id;
                 renderEvents();
                 document.getElementById("dtitle").textContent = ev.name;
-                document.getElementById("dmeta").textContent =
-                    `${fmt(ev.start)} – ${fmt(ev.end)}  /n  ${ev.venue}  ·  ${ev.address}`;
+                document.getElementById("dmeta").innerHTML =
+                    `<p>${fmt(ev.start)} – ${fmt(ev.end)}  </p><p> ${ev.address}</p>`;
                 document.getElementById("ddesc").textContent = ev.desc;
                 document.getElementById("dlink").href = ev.url;
                 document.getElementById("detailCol").classList.add("open");
