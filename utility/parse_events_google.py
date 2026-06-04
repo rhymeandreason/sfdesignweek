@@ -15,22 +15,42 @@ GOOGLE_API_KEY = "AIzaSyCv89jgro-2OmWax1v4I52-Pw2nDN6Fbj8"
 def parse_ics(file_path):
     events = []
     current_event = {}
+
+    # STEP 1: Unfold the lines
+    unfolded_lines = []
     with open(file_path, "r", encoding="utf-8") as f:
         for line in f:
-            line = line.strip()
-            if line.startswith("BEGIN:VEVENT"):
-                current_event = {}
-            elif line.startswith("END:VEVENT"):
-                if current_event:
-                    events.append(current_event)
-            elif ":" in line:
-                parts = line.split(":", 1)
-                key, val = parts[0].strip(), parts[1].strip()
+            # Strip newline characters but keep trailing spaces just in case
+            line = line.rstrip("\r\n")
 
-                if key in ["DESCRIPTION", "SUMMARY", "LOCATION"]:
-                    current_event[key] = val.replace("\\,", ",")
-                elif key in ["DTSTART", "DTEND", "URL"]:
-                    current_event[key] = val
+            # If a line starts with a space or tab, it's a continuation of the previous line
+            if line.startswith(" ") or line.startswith("\t"):
+                if unfolded_lines:
+                    # Append it to the previous line (skipping the leading space)
+                    unfolded_lines[-1] += line[1:]
+            else:
+                unfolded_lines.append(line)
+
+    # STEP 2: Parse the unfolded lines
+    for line in unfolded_lines:
+        if line == "BEGIN:VEVENT":
+            current_event = {}
+        elif line == "END:VEVENT":
+            if current_event:
+                events.append(current_event)
+        elif ":" in line:
+            parts = line.split(":", 1)
+            key, val = parts[0].strip(), parts[1].strip()
+
+            if key in ["DESCRIPTION", "SUMMARY", "LOCATION"]:
+                # Fix escaped commas and actual ICS newlines
+                clean_val = (
+                    val.replace("\\,", ",").replace("\\n", "\n").replace("\\N", "\n")
+                )
+                current_event[key] = clean_val
+            elif key in ["DTSTART", "DTEND", "URL"]:
+                current_event[key] = val
+
     return events
 
 
@@ -68,14 +88,14 @@ def get_coordinates(address, geolocator, cache):
         if location:
             cache[address] = (location.latitude, location.longitude)
             print(
-                f"✅ Mapped: {address} \n   -> {location.latitude}, {location.longitude}"
+                f"✅ Mapped: {address[:40]}... \n   -> {location.latitude}, {location.longitude}"
             )
             return cache[address]
 
     except (GeocoderTimedOut, GeocoderQueryError) as e:
-        print(f"⚠️ Error mapping {address}: {e}")
+        print(f"⚠️ Error mapping {address[:40]}: {e}")
 
-    print(f"❌ FAILED to map: {address}")
+    print(f"❌ FAILED to map: {address[:40]}")
     cache[address] = (37.7749, -122.4194)
     return cache[address]
 
@@ -130,7 +150,6 @@ def main():
 
             lat, lng = get_coordinates(raw_address, geolocator, coord_cache)
 
-            # Generate the Google Maps Link using the exact coordinates
             gmaps_url = f"https://www.google.com/maps/search/?api=1&query={lat},{lng}"
 
             filtered_events.append(
